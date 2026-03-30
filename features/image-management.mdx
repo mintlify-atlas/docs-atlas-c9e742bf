@@ -1,0 +1,91 @@
+---
+title: "Image management"
+description: How destination hero images are selected, uploaded, and displayed in MundeApp
+---
+
+## Overview
+
+Each destination has a hero image stored in Firebase Cloud Storage. Images are selected from the device gallery using Android's system photo picker, then uploaded during destination creation or editing. The resulting download URL is saved in the Firestore document and used to load images throughout the app.
+
+## Picking an image
+
+`FormDestinationActivity` registers an `ActivityResultContracts.GetContent()` launcher with the MIME type `"image/*"`. Tapping **Seleccionar Imagen** opens the system photo picker. When the user selects an image, the selected URI is stored in `imageUri` and a preview is shown immediately in the 200dp `ImageView` using `setImageURI(uri)`.
+
+```kotlin FormDestinationActivity.kt
+val launcher = registerForActivityResult(ActivityResultContracts.GetContent()) {
+    imageUri = it
+    imgPreview.setImageURI(it)
+}
+
+btnSelect.setOnClickListener {
+    launcher.launch("image/*")
+}
+```
+
+## Uploading images
+
+The upload is handled by `FirebaseService` — the activity passes the local URI and `FirebaseService` performs the Storage upload, then saves the resulting download URL back into the Firestore document.
+
+| Scenario | Method called |
+| --- | --- |
+| Creating a new destination | `firebase.saveDestination(destination, imageUri!!)` |
+| Editing with a new image selected | `firebase.updateDestinations(updated, imageUri!!)` |
+| Editing without selecting a new image | `firebase.updateDestinationWithoutImage(updated)` — preserves the existing `imageUrl` |
+
+The Save button is disabled while the operation is in progress to prevent duplicate submissions:
+
+```kotlin FormDestinationActivity.kt
+Toast.makeText(this, "Guardando...", Toast.LENGTH_SHORT).show()
+btnSave.isEnabled = false
+
+firebase.saveDestination(destination, imageUri!!) { success ->
+    if (success) {
+        Toast.makeText(this, "Destino guardado", Toast.LENGTH_SHORT).show()
+        finish()
+    } else {
+        Toast.makeText(this, "Error al guardar", Toast.LENGTH_SHORT).show()
+    }
+    btnSave.isEnabled = true
+}
+```
+
+<Note>
+  `FirebaseService` handles the actual Storage upload and saves the download URL back into the Destination document in Firestore. The activity only provides the local `Uri`.
+</Note>
+
+## Displaying images
+
+Glide 4.16.0 is used throughout the app to load images from URLs.
+
+**In `DestinationAdapter`** — loads `imageUrl` into the hero `ImageView` of each card in the destination list:
+
+```kotlin DestinationAdapter.kt
+Glide.with(holder.itemView.context)
+    .load(destination.imageUrl)
+    .into(holder.image)
+```
+
+**In `FormDestinationActivity` (edit mode)** — loads the existing `imageUrl` via Glide into the preview `ImageView` when the form is opened for editing:
+
+```kotlin FormDestinationActivity.kt
+destinationEdit?.let {
+    // ...
+    if (it.imageUrl.isNotEmpty()) {
+        Glide.with(this)
+            .load(it.imageUrl)
+            .into(imgPreview)
+    }
+}
+```
+
+## Image requirements
+
+- **Accepted types:** any `image/*` MIME type.
+- **Size limits:** no size limits are defined in the app code. Firebase Storage default quotas and limits apply.
+- **Permissions:** both permissions are declared in `AndroidManifest.xml`:
+  - `READ_MEDIA_IMAGES` — required on Android 13+ (API 33+).
+  - `READ_EXTERNAL_STORAGE` with `maxSdkVersion="32"` — for Android 12 and older.
+
+<Warning>
+  Images are **not** deleted from Firebase Storage when a destination is deleted. `FirebaseService.deleteDestinations()` only removes the Firestore document. Orphaned images will remain in Storage and continue to consume quota.
+</Warning>

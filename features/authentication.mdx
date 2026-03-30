@@ -1,0 +1,135 @@
+---
+title: "Authentication"
+description: How users register and log in to MundeApp
+---
+
+## Overview
+
+MundeApp uses Firebase Authentication with email/password sign-in. Two activities handle the authentication flow: `LoginActivity` (the app launcher) and `RegisterActivity`. All session state is managed by the Firebase Auth SDK.
+
+<Note>
+  Sessions persist automatically — users don't need to log in again after closing the app.
+</Note>
+
+## Logging in
+
+The login screen presents two text fields (email and password) and two buttons: **Ingresar** (log in) and **¿No tienes cuenta? Regístrate** (go to register).
+
+<Steps>
+  <Step title="Enter credentials">
+    Type your email address and password into the corresponding fields.
+  </Step>
+  <Step title="Tap Ingresar">
+    Both fields must be non-empty. If either is blank, a Toast message reads _"Todos los campos son obligatorios"_ and the request is not sent.
+  </Step>
+  <Step title="Firebase Authentication">
+    `FirebaseService.login(email, pass)` is called. On success, the app shows a _"Bienvenido"_ Toast and navigates to `MainActivity`. On failure, the error message from Firebase is displayed in a Toast.
+  </Step>
+</Steps>
+
+```kotlin LoginActivity.kt
+btnLogin.setOnClickListener {
+
+    val email = etEmail.text.toString().trim()
+    val pass = etPassword.text.toString().trim()
+
+    if (email.isEmpty() || pass.isEmpty()) {
+        Toast.makeText(this, "Todos los campos son obligatorios", Toast.LENGTH_SHORT).show()
+        return@setOnClickListener
+    }
+
+    firebase.login(email, pass) { success, error ->
+        if (success) {
+            Toast.makeText(this, "Bienvenido", Toast.LENGTH_SHORT).show()
+
+            startActivity(Intent(this, MainActivity::class.java))
+            finish()
+        } else {
+            Toast.makeText(this, error ?: "Error desconocido", Toast.LENGTH_LONG).show()
+        }
+    }
+}
+```
+
+## Registering a new account
+
+The register screen mirrors the login layout with an email field, a password field, and a **Registrar** button.
+
+<Steps>
+  <Step title="Enter email and password">
+    Both fields must be non-empty. An empty field shows a _"Campos vacíos"_ Toast.
+  </Step>
+  <Step title="Tap Registrar">
+    `FirebaseService.register(email, password)` is called.
+  </Step>
+  <Step title="Result">
+    On success, a _"Registrado"_ Toast is shown and `finish()` is called, returning the user to `LoginActivity`. On failure, the Firebase error message is shown in a Toast.
+  </Step>
+</Steps>
+
+```kotlin RegisterActivity.kt
+btnRegistrar.setOnClickListener {
+
+    val email = etEmail.text.toString()
+    val password = etPassword.text.toString()
+
+    if (email.isEmpty() || password.isEmpty()) {
+        Toast.makeText(this, "Campos vacíos", Toast.LENGTH_SHORT).show()
+        return@setOnClickListener
+    }
+
+    firebase.register(email, password) { success, error ->
+        if (success) {
+            Toast.makeText(this, "Registrado", Toast.LENGTH_SHORT).show()
+            finish()
+        } else {
+            Toast.makeText(this, error, Toast.LENGTH_LONG).show()
+        }
+    }
+}
+```
+
+## Staying authenticated / session persistence
+
+Firebase Authentication persists the signed-in user to local storage automatically. When `MainActivity` starts, `onStart()` calls `firebase.getCurrentUser()`. If no user is found (session expired or never created), the activity redirects to `LoginActivity` and finishes itself.
+
+```kotlin MainActivity.kt
+override fun onStart() {
+    super.onStart()
+
+    val user = firebase.getCurrentUser()
+
+    if (user == null) {
+        startActivity(Intent(this, LoginActivity::class.java))
+        finish()
+    }
+}
+```
+
+This guard runs on every start of `MainActivity`, including returns from the background, so unauthenticated access to the destination list is not possible.
+
+## Logging out
+
+The toolbar in `MainActivity` contains an overflow menu item **Cerrar sesión**. Tapping it opens a confirmation `AlertDialog`. If the user confirms, `firebase.logout()` is called and the app navigates back to `LoginActivity`.
+
+```kotlin MainActivity.kt
+private fun logOut() {
+
+    AlertDialog.Builder(this)
+        .setTitle("Cerrar sesión")
+        .setMessage("¿Seguro que deseas cerrar sesión?")
+        .setPositiveButton("Sí") { _, _ ->
+
+            firebase.logout()
+
+            startActivity(Intent(this, LoginActivity::class.java))
+            finish()
+        }
+        .setNegativeButton("Cancelar", null)
+        .show()
+}
+```
+
+<Warning>
+  If `google-services.json` is missing or Firebase Authentication is not enabled in the Firebase console, login will always fail.
+</Warning>

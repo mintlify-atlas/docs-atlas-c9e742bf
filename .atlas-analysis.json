@@ -1,0 +1,71 @@
+{
+  "projectType": "saas",
+  "projectName": "MundeApp — Travel Agency App",
+  "projectDescription": "An Android mobile application for travel agencies to manage and showcase travel destinations, with Firebase-backed authentication, Firestore data storage, and Cloud Storage for destination images.",
+  "theme": "almond",
+  "primaryColor": "#673AB7",
+  "lightColor": "#D1C4E9",
+  "darkColor": "#512DA8",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "architecture"
+            ]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/authentication",
+              "features/destinations",
+              "features/image-management"
+            ]
+          },
+          {
+            "group": "Firebase Integration",
+            "pages": [
+              "firebase/setup",
+              "firebase/firestore",
+              "firebase/storage"
+            ]
+          },
+          {
+            "group": "Development Guide",
+            "pages": [
+              "development/project-structure",
+              "development/building",
+              "development/contributing"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Email/password authentication with Firebase Auth",
+    "Travel destination CRUD (create, read, update, delete)",
+    "Image upload and management via Firebase Cloud Storage",
+    "Real-time data sync with Cloud Firestore",
+    "Material Design UI with custom purple/pink branding",
+    "Country selection from a curated list of 23 destinations",
+    "Auth-guarded main screen — redirects unauthenticated users to login"
+  ],
+  "publicApiSurface": [
+    "FirebaseService.login(email, password, callback)",
+    "FirebaseService.register(email, password, callback)",
+    "FirebaseService.logout()",
+    "FirebaseService.getCurrentUser()",
+    "FirebaseService.getDestinations(callback)",
+    "FirebaseService.saveDestination(destination, imageUri, callback)",
+    "FirebaseService.updateDestinations(destination, imageUri, callback)",
+    "FirebaseService.updateDestinationWithoutImage(destination, callback)",
+    "FirebaseService.deleteDestinations(id, callback)",
+    "Destination(id, name, country, price, description, imageUrl)"
+  ]
+}

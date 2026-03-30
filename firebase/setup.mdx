@@ -1,0 +1,123 @@
+---
+title: "Firebase setup"
+description: How to connect MundeApp to your Firebase project
+---
+
+MundeApp requires a Firebase project with three services enabled: Authentication, Cloud Firestore, and Cloud Storage. This page walks you through creating the project, registering the Android app, and enabling each service.
+
+## Create a Firebase project
+
+<Steps>
+  <Step title="Open the Firebase Console">
+    Go to [https://console.firebase.google.com](https://console.firebase.google.com) and sign in with your Google account.
+  </Step>
+  <Step title="Create a new project">
+    Click **Add project**, enter a name (e.g. `MundeApp`), and follow the setup wizard. You can disable Google Analytics if you do not need it.
+  </Step>
+  <Step title="Add an Android app">
+    Once the project is created, click **Add app** and select the Android icon.
+  </Step>
+  <Step title="Register the app">
+    Enter the Android package name exactly as shown:
+
+    ```
+    com.dsm.agencytravel
+    ```
+
+    The app nickname and debug signing certificate are optional for development.
+  </Step>
+  <Step title="Download google-services.json">
+    Download the `google-services.json` configuration file and place it in the `app/` directory of the cloned repository.
+
+    ```
+    TravelAgencyApp/
+    └── app/
+        └── google-services.json   ← place it here
+    ```
+
+    <Warning>
+      Never commit `google-services.json` to public source control — it contains your Firebase project credentials.
+    </Warning>
+
+    <Info>
+      The repository's `.gitignore` already excludes `google-services.json`.
+    </Info>
+  </Step>
+</Steps>
+
+## Enable Firebase Authentication
+
+<Steps>
+  <Step title="Open Authentication">
+    In the Firebase Console, navigate to **Build → Authentication** and click **Get started**.
+  </Step>
+  <Step title="Enable Email/Password sign-in">
+    Go to the **Sign-in method** tab, click **Email/Password**, toggle it to **Enabled**, and click **Save**.
+  </Step>
+</Steps>
+
+## Create the Firestore database
+
+<Steps>
+  <Step title="Open Firestore">
+    In the Firebase Console, navigate to **Build → Firestore Database** and click **Create database**.
+  </Step>
+  <Step title="Choose test mode">
+    Select **Start in test mode** for development so reads and writes are permitted while you integrate the app.
+
+    <Warning>
+      Test mode rules allow unauthenticated reads and writes for 30 days. Before going to production, lock the rules to authenticated users only. See [Cloud Firestore](/firebase/firestore#security-rules) for recommended rules.
+    </Warning>
+  </Step>
+  <Step title="Select a location">
+    Choose the Cloud Firestore location closest to your users. This cannot be changed after creation.
+  </Step>
+</Steps>
+
+The app uses a `destinations` collection. Documents in that collection are created and managed automatically by `FirebaseService`. A Destination document looks like this:
+
+```json
+{
+  "id": "abc123",
+  "name": "Machu Picchu",
+  "country": "Peru",
+  "price": 299.99,
+  "description": "Ancient Inca citadel set high in the Andes Mountains...",
+  "imageUrl": "https://firebasestorage.googleapis.com/..."
+}
+```
+
+## Enable Cloud Storage
+
+<Steps>
+  <Step title="Open Storage">
+    In the Firebase Console, navigate to **Build → Storage** and click **Get started**.
+  </Step>
+  <Step title="Accept the default rules">
+    Accept the default security rules for now and click **Next**.
+
+    <Warning>
+      The default Storage rules allow public reads and authenticated writes. Tighten these rules before going to production. See [Firebase Cloud Storage](/firebase/storage#security-rules) for recommended rules.
+    </Warning>
+  </Step>
+  <Step title="Confirm the bucket location">
+    Choose a storage bucket location and click **Done**. The bucket URL is wired into your app automatically via `google-services.json` — no manual configuration is needed.
+  </Step>
+</Steps>
+
+## Verify the setup
+
+<Steps>
+  <Step title="Add google-services.json">
+    Confirm that `google-services.json` is in the `app/` directory as described above.
+  </Step>
+  <Step title="Sync Gradle">
+    Open the project in Android Studio. A banner will prompt you to sync Gradle — click **Sync Now**. The `com.google.gms.google-services` plugin reads the configuration file during the sync.
+  </Step>
+  <Step title="Run the app">
+    Build and run the app on a device or emulator running Android 11 (API 30) or higher. The login screen should appear without any Firebase-related crashes.
+  </Step>
+  <Step title="Register a test account">
+    Tap **Register** and create a new account using an email address and password. If registration succeeds, the new user will appear in **Firebase Console → Authentication → Users**.
+  </Step>
+</Steps>

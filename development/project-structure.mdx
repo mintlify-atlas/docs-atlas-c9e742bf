@@ -1,0 +1,91 @@
+---
+title: "Project structure"
+description: "An overview of the MundeApp codebase layout and key files."
+---
+
+MundeApp is a single-module Android project using Kotlin and Gradle with Kotlin DSL. The repository root contains one app module (`app/`) and standard Gradle wrapper files.
+
+## Repository layout
+
+```
+TravelAgencyApp/
+├── app/
+│   ├── build.gradle.kts          # App-level Gradle config, dependencies, SDK versions
+│   ├── proguard-rules.pro        # ProGuard rules (minification disabled by default)
+│   └── src/
+│       ├── main/
+│       │   ├── AndroidManifest.xml
+│       │   ├── java/com/dsm/agencytravel/
+│       │   │   ├── LoginActivity.kt
+│       │   │   ├── RegisterActivity.kt
+│       │   │   ├── MainActivity.kt
+│       │   │   ├── FormDestinationActivity.kt
+│       │   │   ├── Adapter/
+│       │   │   │   └── DestinationAdapter.kt
+│       │   │   ├── model/
+│       │   │   │   └── Destination.kt
+│       │   │   └── ui/theme/         # Compose scaffolding — not used by any Activity
+│       │   │       ├── Color.kt
+│       │   │       ├── Theme.kt
+│       │   │       └── Type.kt
+│       │   └── res/
+│       │       ├── color/            # Selector XMLs for input stroke, hint, icon tint
+│       │       ├── drawable/         # App logos and launcher icons
+│       │       ├── layout/           # Activity and item layouts
+│       │       ├── menu/             # Toolbar overflow menu
+│       │       ├── mipmap-*/         # Launcher icon densities
+│       │       ├── values/           # colors.xml, strings.xml, themes.xml
+│       │       └── xml/              # Backup and data extraction rules
+│       ├── androidTest/              # Instrumented test directory (no tests yet)
+│       └── test/                     # Unit test directory (no tests yet)
+├── build.gradle.kts                  # Root Gradle config with plugin declarations
+├── settings.gradle.kts               # Project name (AgencyTravel) and module inclusion
+├── gradle.properties                 # Gradle JVM args, AndroidX flag, Kotlin code style
+├── gradle/
+│   └── libs.versions.toml            # Version catalog for dependencies
+├── gradlew                           # Gradle wrapper script (Unix)
+└── gradlew.bat                       # Gradle wrapper script (Windows)
+```
+
+## Key files
+
+| File | Purpose |
+|------|---------|
+| `app/build.gradle.kts` | App dependencies, SDK versions (min 30, target 36), Java 11 compat |
+| `build.gradle.kts` | Root plugin declarations (AGP 9.0.1, Kotlin 2.0.21, google-services) |
+| `settings.gradle.kts` | Sets root project name `AgencyTravel`, includes `:app` module |
+| `gradle/libs.versions.toml` | Centralized version catalog for all dependencies |
+| `app/src/main/AndroidManifest.xml` | App permissions, all Activity registrations, launcher config |
+| `gradle.properties` | `android.useAndroidX=true`, `kotlin.code.style=official` |
+
+## Source packages
+
+| Package | Contents |
+|---------|----------|
+| `com.dsm.agencytravel` | `LoginActivity`, `RegisterActivity`, `MainActivity`, `FormDestinationActivity` |
+| `com.dsm.agencytravel.Adapter` | `DestinationAdapter` — RecyclerView adapter for the destination list |
+| `com.dsm.agencytravel.model` | `Destination` data class |
+| `com.dsm.agencytravel.firebase` | **Expected location of `FirebaseService`** — see below |
+| `com.dsm.agencytravel.ui.theme` | Compose scaffold files (Color, Theme, Type) — unused by any Activity |
+
+## Missing file — FirebaseService
+
+<Warning>
+`FirebaseService.kt` in package `com.dsm.agencytravel.firebase` is imported by every Activity but is **not committed to the repository**. The project will not compile without it.
+</Warning>
+
+All Activities call methods on a `firebase` instance of `FirebaseService`. The expected API surface, inferred from call sites, is:
+
+| Method | Called from | Purpose |
+|--------|-------------|---------|
+| `getCurrentUser()` | `MainActivity` | Returns the current `FirebaseUser` or null |
+| `login(email, pass, callback)` | `LoginActivity` | Firebase Auth email/password sign-in |
+| `register(email, password, callback)` | `RegisterActivity` | Firebase Auth account creation |
+| `logout()` | `MainActivity` | Firebase Auth sign-out |
+| `getDestinations(callback)` | `MainActivity` | Fetches all Firestore destination documents |
+| `saveDestination(destination, imageUri, callback)` | `FormDestinationActivity` | Uploads image to Storage, creates Firestore doc |
+| `updateDestinations(destination, imageUri, callback)` | `FormDestinationActivity` | Uploads new image, updates Firestore doc |
+| `updateDestinationWithoutImage(destination, callback)` | `FormDestinationActivity` | Updates Firestore doc, preserves existing image URL |
+| `deleteDestinations(id, callback)` | `MainActivity` | Deletes Firestore doc by ID |
+
+See the [Contributing guide](/development/contributing) for a skeleton implementation.

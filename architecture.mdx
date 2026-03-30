@@ -1,0 +1,101 @@
+---
+title: "Architecture"
+description: "How MundeApp's screens, data model, service layer, and Firebase backend fit together."
+---
+
+MundeApp is a single-module Android application written in Kotlin. The UI is built with traditional Activities and XML layouts (Material Design) — not Jetpack Compose. All backend functionality is provided by Firebase: user authentication, data persistence, and image storage. There is no custom server or REST API.
+
+## Screen flow
+
+The app has four Activities. `LoginActivity` is the launcher and the entry point for all users.
+
+```
+LoginActivity ──(sign in)──▶ MainActivity ──(FAB / edit)──▶ FormDestinationActivity
+      │                           │
+      │                           └──(logout)──▶ LoginActivity
+      └──(register button)──▶ RegisterActivity ──(success/back)──▶ LoginActivity
+```
+
+| Transition | Trigger |
+|---|---|
+| `LoginActivity` → `MainActivity` | Successful `firebase.login()` call |
+| `LoginActivity` → `RegisterActivity` | Tap the register button |
+| `RegisterActivity` → `LoginActivity` | `finish()` after successful registration, or system back |
+| `MainActivity` → `FormDestinationActivity` | Tap the **+** FAB (create) or tap **Edit** on a list item |
+| `FormDestinationActivity` → `MainActivity` | `finish()` after a successful save or update |
+| `MainActivity` → `LoginActivity` | Tap **Logout** from the toolbar menu, or unauthenticated redirect in `onStart()` |
+
+## Layers
+
+The app has three logical layers.
+
+**UI layer** — Activities and the RecyclerView adapter handle all user interaction and screen rendering:
+
+- `LoginActivity` — email/password sign-in form
+- `RegisterActivity` — account creation form
+- `MainActivity` — destination list with toolbar and FAB
+- `FormDestinationActivity` — create and edit destination form with image picker
+- `DestinationAdapter` — binds `Destination` objects to RecyclerView item views; exposes `onEdit` and `onDelete` callbacks to `MainActivity`
+
+**Data model** — The `Destination` data class (in `com.dsm.agencytravel.model`) represents a single catalog entry. It implements `Serializable` so instances can be passed between Activities via `Intent` extras.
+
+**Service layer** — `FirebaseService` (in `com.dsm.agencytravel.firebase`) encapsulates all interactions with Firebase. Activities instantiate it directly and call its methods with callback lambdas. It wraps:
+
+- Firebase Authentication — `login()`, `register()`, `logout()`, `getCurrentUser()`
+- Cloud Firestore — `getDestinations()`, `saveDestination()`, `updateDestinations()`, `updateDestinationWithoutImage()`, `deleteDestinations()`
+- Firebase Cloud Storage — image upload, called internally by `saveDestination()` and `updateDestinations()`
+
+## Data model
+
+The `Destination` data class maps directly to a Firestore document in the `destinations` collection.
+
+```kotlin
+data class Destination(
+    var id: String = "",
+    var name: String = "",
+    var country: String = "",
+    var price: Double = 0.0,
+    var description: String = "",
+    var imageUrl: String = ""
+) : Serializable
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `String` | Firestore document ID. Empty string when creating a new destination before it is saved. |
+| `name` | `String` | Display name of the destination. Required — the form rejects an empty value. |
+| `country` | `String` | Country selected from a spinner populated by the `countries_array` string resource (23 options). |
+| `price` | `Double` | Price in the agency's currency. Must be a positive number. |
+| `description` | `String` | Description text. Must be at least 20 characters. |
+| `imageUrl` | `String` | HTTPS URL of the hero image stored in Firebase Cloud Storage. Set by `FirebaseService` after a successful upload. |
+
+## Firebase services used
+
+**Firebase Authentication**
+
+MundeApp uses email/password sign-in. `FirebaseService.register()` creates a new account; `FirebaseService.login()` signs in an existing one. `FirebaseService.logout()` signs the current user out. No social or third-party providers are configured.
+
+**Cloud Firestore**
+
+All destination data is stored in a single top-level collection. Each document corresponds to one `Destination` instance. `FirebaseService.getDestinations()` reads the full collection and returns a list to the caller. Create, update, and delete operations target individual documents by `id`.
+
+**Firebase Cloud Storage**
+
+When a destination is created or edited with a new image, `FirebaseService` uploads the selected `Uri` to Cloud Storage and retrieves the download URL. That URL is stored in the `imageUrl` field of the Firestore document. Glide uses the URL to load and cache the image in `FormDestinationActivity` and in each RecyclerView item.
+
+## Auth guard
+
+`MainActivity.onStart()` calls `firebase.getCurrentUser()` on every resume cycle. If the result is `null` — meaning no authenticated Firebase session exists — the activity immediately redirects to `LoginActivity` and calls `finish()` to remove itself from the back stack.
+
+```kotlin
+override fun onStart() {
+    super.onStart()
+    val user = firebase.getCurrentUser()
+    if (user == null) {
+        startActivity(Intent(this, LoginActivity::class.java))
+        finish()
+    }
+}
+```
+
+This means navigating directly to `MainActivity` without a valid session (for example, after the Firebase token expires) always bounces the user back to the login screen.

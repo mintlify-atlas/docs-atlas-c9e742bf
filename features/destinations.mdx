@@ -1,0 +1,232 @@
+---
+title: "Destination management"
+description: How to create, browse, edit, and delete travel destinations in MundeApp
+---
+
+## Overview
+
+The main screen (`MainActivity`) displays all saved destinations in a scrollable list. Each card shows the hero image, destination name, price formatted as `$X.XX`, and a 2-line truncated description, along with **Editar** and **Eliminar** action buttons.
+
+## Browsing destinations
+
+`MainActivity` uses a `RecyclerView` with a `LinearLayoutManager`. Destinations are fetched from Cloud Firestore via `FirebaseService.getDestinations()`. The list refreshes on every `onResume()` call, so any changes made in the form screen are reflected immediately when the user navigates back.
+
+```kotlin MainActivity.kt
+private fun loadDestinations() {
+    firebase.getDestinations { list ->
+
+        recycler.adapter = DestinationAdapter(
+            list,
+            onEdit = { destination ->
+                val intent = Intent(this, FormDestinationActivity::class.java)
+                intent.putExtra("destino", destination)
+                startActivity(intent)
+            },
+            onDelete = { destination ->
+
+                AlertDialog.Builder(this)
+                    .setTitle("Eliminar destino")
+                    .setMessage("¿Seguro que deseas eliminar ${destination.name}?")
+                    .setPositiveButton("Sí") { _, _ ->
+
+                        firebase.deleteDestinations(destination.id) { success ->
+                            if (success) {
+                                Toast.makeText(this, "Eliminado", Toast.LENGTH_SHORT).show()
+                                loadDestinations()
+                            } else {
+                                Toast.makeText(this, "Error al eliminar", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+
+                    }
+                    .setNegativeButton("Cancelar", null)
+                    .show()
+            }
+        )
+    }
+}
+```
+
+## Creating a destination
+
+<Steps>
+  <Step title="Tap the FAB">
+    Tap the floating action button (`+`) on the main screen. `FormDestinationActivity` opens in create mode (no Intent extra is passed).
+  </Step>
+  <Step title="Fill in the fields">
+    Complete all required fields:
+
+    - **Name** — required; shown as an error if empty.
+    - **Country** — selected from a spinner with 23 options (see [destination data model](#destination-data-model)).
+    - **Price** — must parse as a positive `Double`; shown as an error if invalid.
+    - **Description** — minimum 20 characters.
+    - **Image** — required for new destinations; tap **Seleccionar Imagen** to open the system photo picker.
+  </Step>
+  <Step title="Tap Guardar Cambios">
+    `FirebaseService.saveDestination(destination, imageUri)` is called. The Save button is disabled during the upload to prevent duplicate submissions. On success, the activity finishes and the list reloads.
+  </Step>
+</Steps>
+
+```kotlin FormDestinationActivity.kt
+if (name.isEmpty()) {
+    etName.error = "Nombre requerido"
+    return@setOnClickListener
+}
+
+if (price == null || price <= 0) {
+    etPrice.error = "Precio inválido"
+    return@setOnClickListener
+}
+
+if (description.length < 20) {
+    etDescription.error = "Mínimo 20 caracteres"
+    return@setOnClickListener
+}
+
+if (destinationEdit == null) {
+    if (imageUri == null) {
+        Toast.makeText(this, "Selecciona una imagen", Toast.LENGTH_SHORT).show()
+        return@setOnClickListener
+    }
+
+    val destination = Destination(
+        id = "",
+        name = name,
+        country = country,
+        price = price,
+        description = description,
+        imageUrl = ""
+    )
+
+    Toast.makeText(this, "Guardando...", Toast.LENGTH_SHORT).show()
+    btnSave.isEnabled = false
+
+    firebase.saveDestination(destination, imageUri!!) { success ->
+        if (success) {
+            Toast.makeText(this, "Destino guardado", Toast.LENGTH_SHORT).show()
+            finish()
+        } else {
+            Toast.makeText(this, "Error al guardar", Toast.LENGTH_SHORT).show()
+        }
+        btnSave.isEnabled = true
+    }
+}
+```
+
+## Editing a destination
+
+<Steps>
+  <Step title="Tap Editar">
+    Tap the **Editar** button on a destination card. The `Destination` object is passed to `FormDestinationActivity` as a `Serializable` Intent extra with key `"destino"`.
+  </Step>
+  <Step title="Pre-filled form">
+    All fields are pre-filled with the existing values. The current image is loaded via Glide into the preview `ImageView`.
+  </Step>
+  <Step title="Optionally select a new image">
+    Tap **Seleccionar Imagen** to replace the existing image. If no new image is selected, the original `imageUrl` is preserved.
+  </Step>
+  <Step title="Tap Guardar Cambios">
+    - If a new image was selected: `FirebaseService.updateDestinations(updated, imageUri)` is called.
+    - If no new image: `FirebaseService.updateDestinationWithoutImage(updated)` is called.
+  </Step>
+</Steps>
+
+```kotlin FormDestinationActivity.kt
+// Read the extra to detect edit mode
+destinationEdit = intent.getSerializableExtra("destino") as? Destination
+
+// ...
+
+} else {
+    val updated = destinationEdit!!.copy(
+        name = name,
+        country = country,
+        price = price,
+        description = description
+    )
+
+    Toast.makeText(this, "Actualizando...", Toast.LENGTH_SHORT).show()
+    btnSave.isEnabled = false
+
+    if (imageUri != null) {
+        firebase.updateDestinations(updated, imageUri!!) { success ->
+            if (success) {
+                Toast.makeText(this, "Destino actualizado", Toast.LENGTH_SHORT).show()
+                btnSave.isEnabled = true
+                finish()
+            }
+        }
+    } else {
+        firebase.updateDestinationWithoutImage(updated) { success ->
+            if (success) {
+                Toast.makeText(this, "Destino actualizado", Toast.LENGTH_SHORT).show()
+                btnSave.isEnabled = true
+                finish()
+            }
+        }
+    }
+}
+```
+
+## Deleting a destination
+
+<Steps>
+  <Step title="Tap Eliminar">
+    Tap the **Eliminar** button on a destination card. A confirmation `AlertDialog` appears with the destination name.
+  </Step>
+  <Step title="Confirm deletion">
+    Tap **Sí** to confirm. `FirebaseService.deleteDestinations(destination.id)` is called.
+  </Step>
+  <Step title="List reloads">
+    On success, a _"Eliminado"_ Toast is shown and `loadDestinations()` is called to refresh the list. On failure, an error Toast is shown.
+  </Step>
+</Steps>
+
+```kotlin MainActivity.kt
+onDelete = { destination ->
+
+    AlertDialog.Builder(this)
+        .setTitle("Eliminar destino")
+        .setMessage("¿Seguro que deseas eliminar ${destination.name}?")
+        .setPositiveButton("Sí") { _, _ ->
+
+            firebase.deleteDestinations(destination.id) { success ->
+                if (success) {
+                    Toast.makeText(this, "Eliminado", Toast.LENGTH_SHORT).show()
+                    loadDestinations()
+                } else {
+                    Toast.makeText(this, "Error al eliminar", Toast.LENGTH_SHORT).show()
+                }
+            }
+
+        }
+        .setNegativeButton("Cancelar", null)
+        .show()
+}
+```
+
+## Destination data model
+
+<ParamField path="id" type="string">
+  Firestore document ID. Auto-generated on creation; empty string before the first save.
+</ParamField>
+
+<ParamField path="name" type="string" required>
+  Destination display name. Required — cannot be empty.
+</ParamField>
+
+<ParamField path="country" type="string" required>
+  Country selected from a spinner of 23 options: Argentina, Brasil, Bolivia, Chile, Colombia, Costa Rica, Ecuador, El Salvador, Estados Unidos, España, Francia, Guatemala, Grecia, Honduras, Italia, Japón, México, Nicaragua, Panamá, Paraguay, Perú, Uruguay, Venezuela.
+</ParamField>
+
+<ParamField path="price" type="number" required>
+  Price as a positive `Double`. Displayed as `$X.XX` in the destination list.
+</ParamField>
+
+<ParamField path="description" type="string" required>
+  Free-text description of the destination. Minimum 20 characters.
+</ParamField>
+
+<ParamField path="imageUrl" type="string">
+  Firebase Storage download URL for the hero image. Set by `FirebaseService` after the image is uploaded. Empty string before the first save.
+</ParamField>

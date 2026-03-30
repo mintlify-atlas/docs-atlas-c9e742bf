@@ -1,0 +1,148 @@
+---
+title: "Contributing"
+description: "How to set up a dev environment, implement the missing FirebaseService, and submit changes to MundeApp."
+---
+
+Contributions to MundeApp are welcome. The most important contribution needed right now is implementing the missing `FirebaseService` class — without it, the project does not compile.
+
+## Setting up your dev environment
+
+<Steps>
+  <Step title="Fork the repository">
+    Fork [DiegoMajano/TravelAgencyApp](https://github.com/DiegoMajano/TravelAgencyApp) on GitHub.
+  </Step>
+  <Step title="Clone your fork">
+    ```bash
+    git clone https://github.com/YOUR_USERNAME/TravelAgencyApp.git
+    cd TravelAgencyApp
+    ```
+  </Step>
+  <Step title="Configure Firebase">
+    Follow the [Firebase setup guide](/firebase/setup) to create a Firebase project and place `google-services.json` in the `app/` directory.
+  </Step>
+  <Step title="Open in Android Studio and sync">
+    Open the repo root in Android Studio. Gradle will sync and download dependencies. See [Building the app](/development/building) for details.
+  </Step>
+</Steps>
+
+## Implementing FirebaseService
+
+<Warning>
+The file `app/src/main/java/com/dsm/agencytravel/firebase/FirebaseService.kt` is missing from the repository. All four Activities import this class — the project will not compile without it. This is the primary contribution opportunity.
+</Warning>
+
+Create the file at the path above. Below is a skeleton with all the method signatures that Activities expect:
+
+```kotlin FirebaseService.kt
+package com.dsm.agencytravel.firebase
+
+import android.net.Uri
+import com.dsm.agencytravel.model.Destination
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.storage.FirebaseStorage
+
+class FirebaseService {
+    private val auth = FirebaseAuth.getInstance()
+    private val firestore = FirebaseFirestore.getInstance()
+    private val storage = FirebaseStorage.getInstance()
+
+    fun getCurrentUser() = auth.currentUser
+
+    fun login(email: String, password: String, callback: (Boolean, String) -> Unit) {
+        auth.signInWithEmailAndPassword(email, password)
+            .addOnSuccessListener { callback(true, "") }
+            .addOnFailureListener { e -> callback(false, e.message ?: "Login failed") }
+    }
+
+    fun register(email: String, password: String, callback: (Boolean, String) -> Unit) {
+        auth.createUserWithEmailAndPassword(email, password)
+            .addOnSuccessListener { callback(true, "") }
+            .addOnFailureListener { e -> callback(false, e.message ?: "Registration failed") }
+    }
+
+    fun logout() {
+        auth.signOut()
+    }
+
+    fun getDestinations(callback: (List<Destination>) -> Unit) {
+        firestore.collection("destinations").get()
+            .addOnSuccessListener { result ->
+                val list = result.toObjects(Destination::class.java)
+                callback(list)
+            }
+            .addOnFailureListener { callback(emptyList()) }
+    }
+
+    fun saveDestination(destination: Destination, imageUri: Uri, callback: (Boolean) -> Unit) {
+        val ref = storage.reference.child("destinations/${System.currentTimeMillis()}")
+        ref.putFile(imageUri).continueWithTask { ref.downloadUrl }
+            .addOnSuccessListener { url ->
+                destination.imageUrl = url.toString()
+                val docRef = firestore.collection("destinations").document()
+                destination.id = docRef.id
+                docRef.set(destination)
+                    .addOnSuccessListener { callback(true) }
+                    .addOnFailureListener { callback(false) }
+            }
+            .addOnFailureListener { callback(false) }
+    }
+
+    fun updateDestinations(destination: Destination, imageUri: Uri, callback: (Boolean) -> Unit) {
+        val ref = storage.reference.child("destinations/${System.currentTimeMillis()}")
+        ref.putFile(imageUri).continueWithTask { ref.downloadUrl }
+            .addOnSuccessListener { url ->
+                destination.imageUrl = url.toString()
+                firestore.collection("destinations").document(destination.id).set(destination)
+                    .addOnSuccessListener { callback(true) }
+                    .addOnFailureListener { callback(false) }
+            }
+            .addOnFailureListener { callback(false) }
+    }
+
+    fun updateDestinationWithoutImage(destination: Destination, callback: (Boolean) -> Unit) {
+        firestore.collection("destinations").document(destination.id).set(destination)
+            .addOnSuccessListener { callback(true) }
+            .addOnFailureListener { callback(false) }
+    }
+
+    fun deleteDestinations(id: String, callback: (Boolean) -> Unit) {
+        firestore.collection("destinations").document(id).delete()
+            .addOnSuccessListener { callback(true) }
+            .addOnFailureListener { callback(false) }
+    }
+}
+```
+
+## Code style
+
+- Kotlin 2.0.21 with `kotlin.code.style=official` (set in `gradle.properties`)
+- Java 11 source and target compatibility
+- The existing codebase uses the Activity pattern directly — no ViewModel or LiveData
+- Follow the conventions used in existing Activity files
+
+## Submitting changes
+
+<Steps>
+  <Step title="Create a feature branch">
+    ```bash
+    git checkout -b feature/your-feature-name
+    ```
+  </Step>
+  <Step title="Make your changes and commit">
+    ```bash
+    git add .
+    git commit -m "Brief description of what changed"
+    ```
+  </Step>
+  <Step title="Push and open a Pull Request">
+    ```bash
+    git push origin feature/your-feature-name
+    ```
+    Then open a Pull Request against the `main` branch on GitHub.
+  </Step>
+</Steps>
+
+<Tip>
+Make sure the app compiles and runs end-to-end before submitting. The most common issue is a missing or misconfigured `google-services.json`.
+</Tip>

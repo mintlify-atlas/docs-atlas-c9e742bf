@@ -1,0 +1,81 @@
+---
+title: "Building the app"
+description: "How to build and run MundeApp locally using Android Studio."
+---
+
+<Info>
+**Prerequisites:** Android Studio Hedgehog (2023.1.1) or newer, JDK 11, Android SDK with API 30–36 installed, and a `google-services.json` file placed in the `app/` directory. See [Firebase setup](/firebase/setup) if you haven't configured Firebase yet.
+</Info>
+
+## Opening the project
+
+Open Android Studio, go to **File → Open**, and select the repository root folder (`TravelAgencyApp/`) — not the `app/` subfolder. Gradle sync will run automatically and download all dependencies.
+
+<Note>
+The first Gradle sync may take several minutes while dependencies download from Maven Central and Google's Maven repository.
+</Note>
+
+## Dependencies
+
+The app's key runtime dependencies are declared in `app/build.gradle.kts`:
+
+| Dependency | Version | Purpose |
+|---|---|---|
+| `firebase-auth` | 24.0.1 | Email/password authentication |
+| `firebase-firestore` | 26.1.2 | Destination data storage |
+| `firebase-storage` | 22.0.1 | Image hosting |
+| `material` | 1.11.0 | Material Design UI components |
+| `recyclerview` | 1.3.2 | Scrollable destination list |
+| `glide` | 4.16.0 | Image loading from Firebase Storage URLs |
+| `core-ktx` | 1.17.0 | Kotlin extensions for Android |
+| `lifecycle-runtime-ktx` | 2.10.0 | Lifecycle runtime extensions for Kotlin |
+
+## Running the app
+
+<Steps>
+  <Step title="Select a run target">
+    In the Android Studio toolbar, open the device dropdown and choose an emulator (API 30+) or a connected physical device.
+  </Step>
+  <Step title="Click Run">
+    Press the **Run** button (▶) or use **Shift+F10**. Android Studio builds the debug APK and installs it on the selected device.
+  </Step>
+  <Step title="Log in">
+    The app launches directly to the login screen. Register a new account or sign in with existing credentials.
+  </Step>
+</Steps>
+
+<Tip>
+Use an Android emulator with API 30 (Android 11) or higher — this matches the app's `minSdk = 30` setting.
+</Tip>
+
+## Building an APK
+
+**From Android Studio:** Go to **Build → Build Bundle(s) / APK(s) → Build APK(s)**.
+
+**From the command line:**
+
+```bash
+./gradlew assembleDebug
+```
+
+The output APK is written to:
+
+```
+app/build/outputs/apk/debug/app-debug.apk
+```
+
+<Warning>
+The debug APK is signed with a debug keystore and is for development only. Do not distribute it. To produce a release build, create a signed keystore and configure `signingConfigs` in `app/build.gradle.kts`.
+</Warning>
+
+## Running tests
+
+The repository has test directories set up but no test implementations yet.
+
+```bash
+# Unit tests
+./gradlew test
+
+# Instrumented tests (requires a connected device or running emulator)
+./gradlew connectedAndroidTest
+```

@@ -1,0 +1,138 @@
+---
+title: "Cloud Firestore"
+description: How MundeApp stores and retrieves destination data in Cloud Firestore
+---
+
+All travel destination data is stored in Cloud Firestore as documents in a `destinations` collection. MundeApp reads and writes these documents through `FirebaseService`.
+
+## Data structure
+
+- **Collection:** `destinations`
+- **Document ID:** auto-generated string, also stored as the `id` field within the document
+
+Each document matches the following schema:
+
+```json
+{
+  "id": "abc123",
+  "name": "Machu Picchu",
+  "country": "Peru",
+  "price": 299.99,
+  "description": "Ancient Inca citadel set high in the Andes Mountains...",
+  "imageUrl": "https://firebasestorage.googleapis.com/..."
+}
+```
+
+The `Destination` Kotlin data class maps directly to this structure. Every field has a default value so Firestore can deserialize documents automatically using its built-in object mapping:
+
+```kotlin
+package com.dsm.agencytravel.model
+
+import java.io.Serializable
+
+data class Destination(
+    var id: String = "",
+    var name: String = "",
+    var country: String = "",
+    var price: Double = 0.0,
+    var description: String = "",
+    var imageUrl: String = ""
+) : Serializable
+```
+
+<Note>
+  Default values on every field are required for Firestore deserialization. Without them, Firestore cannot instantiate the class using its no-argument constructor and will throw a runtime exception.
+</Note>
+
+## Reading destinations
+
+`FirebaseService.getDestinations(callback)` fetches all documents from the `destinations` collection and returns them as a `List<Destination>`.
+
+In `MainActivity`, the list is displayed in a `RecyclerView` with a `LinearLayoutManager`. The fetch is triggered in two places:
+
+- `onCreate()` — initial load when the activity is first created
+- `onResume()` — reload every time the user returns to the main screen (e.g. after adding or editing a destination)
+
+```kotlin
+override fun onCreate(savedInstanceState: Bundle?) {
+    super.onCreate(savedInstanceState)
+    // ... view setup ...
+    loadDestinations()
+}
+
+override fun onResume() {
+    super.onResume()
+    loadDestinations()
+}
+
+private fun loadDestinations() {
+    firebase.getDestinations { list ->
+        recycler.adapter = DestinationAdapter(list, ...)
+    }
+}
+```
+
+<Note>
+  The current implementation performs a one-time fetch on each call. It does not attach a real-time listener, so the list only updates when `onResume()` fires or when `loadDestinations()` is called explicitly (e.g. after a successful delete).
+</Note>
+
+## Writing destinations
+
+`FirebaseService` provides four write operations:
+
+| Method | When it is called | What it does |
+|---|---|---|
+| `saveDestination(destination, imageUri, callback)` | Creating a new destination | Uploads the image to Storage, retrieves the download URL, then writes a new Firestore document with all fields including `imageUrl` |
+| `updateDestinations(destination, imageUri, callback)` | Editing a destination and selecting a new image | Uploads the new image to Storage, retrieves the download URL, then updates the existing Firestore document |
+| `updateDestinationWithoutImage(destination, callback)` | Editing a destination without changing its image | Updates all fields in the Firestore document except `imageUrl`, preserving the existing URL |
+| `deleteDestinations(id, callback)` | Deleting a destination | Removes the Firestore document by its `id` field |
+
+In `FormDestinationActivity`, the correct method is chosen based on whether the user is creating a new destination or editing an existing one, and whether a new image was selected:
+
+```kotlin
+if (destinationEdit == null) {
+    // new destination — image is required
+    firebase.saveDestination(destination, imageUri!!) { success -> ... }
+} else {
+    if (imageUri != null) {
+        // edit with a new image
+        firebase.updateDestinations(updated, imageUri!!) { success -> ... }
+    } else {
+        // edit without changing the image
+        firebase.updateDestinationWithoutImage(updated) { success -> ... }
+    }
+}
+```
+
+## Security rules
+
+<Warning>
+  The default "test mode" rules allow any read and write for 30 days with no authentication requirement. Apply stricter rules before going to production.
+</Warning>
+
+The following rules restrict all reads and writes to authenticated users only. Apply them in **Firebase Console → Firestore Database → Rules**:
+
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /destinations/{destId} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
+```
+
+To apply the rules:
+
+<Steps>
+  <Step title="Open Firestore Rules">
+    In the Firebase Console, go to **Build → Firestore Database** and click the **Rules** tab.
+  </Step>
+  <Step title="Replace the existing rules">
+    Paste the rules above into the editor, replacing the existing content.
+  </Step>
+  <Step title="Publish">
+    Click **Publish**. The rules take effect immediately.
+  </Step>
+</Steps>
